@@ -17,7 +17,7 @@ app.use(cors())
 
 
 app.get("/", (req, res)=>{
-    res.send ("Server is running on port 3000")
+    res.send ("Server is running....")
 })
 
 
