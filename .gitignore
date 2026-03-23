@@ -1,2 +1,8 @@
 /.env
+.env.*
 /node_modules
+/dist
+*.log
+coverage/
+.DS_Store
+context.md

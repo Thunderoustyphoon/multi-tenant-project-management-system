@@ -1,0 +1,352 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// TENANT MODEL
+// ============================================
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               User[]
+  workspaces          Workspace[]
+  projects            Project[]
+  apiKeys             ApiKey[]
+  auditLogs           AuditLog[]
+  rateLimitEvents     RateLimitEvent[]
+  emailDeliveryLogs   EmailDeliveryLog[]
+  tasks               Task[]
+  files               File[]
+
+  @@index([slug])
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+model User {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  email             String
+  name              String
+  passwordHash      String
+  
+  role              String    @default("member") // "owner" or "member" (spec defines exactly 2)
+  isEmailVerified   Boolean   @default(false)
+  status            String    @default("active") // "active", "suspended", "invited"
+  avatar            String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  auditLogs         AuditLog[] @relation("AuditLogUser")
+  workspaceMembers  WorkspaceMember[]
+  projectMembers    ProjectMember[]
+  tasks             Task[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+// ============================================
+// API KEY MODEL (Multi-tenant auth foundation)
+// ============================================
+model ApiKey {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  keyHash             String    @unique // Argon2id hash of raw key
+  createdBy           String
+  createdAt           DateTime  @default(now())
+  
+  // For key rotation (15-minute grace period)
+  rotatedAt           DateTime?
+  oldKeyHash          String?   // Hash of old key during grace period
+  oldKeyExpiresAt     DateTime? // When old key becomes invalid
+  
+  isActive            Boolean   @default(true)
+  lastUsedAt          DateTime?
+  
+  auditLogs           AuditLog[]
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ============================================
+// WORKSPACE MODEL
+// ============================================
+model Workspace {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  ownerId     String   // UserId of workspace owner
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  members     WorkspaceMember[]
+  projects    Project[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([ownerId])
+}
+
+// ============================================
+// WORKSPACE MEMBER MODEL (Binary role: owner/member)
+// ============================================
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role        String   @default("member") // "owner" or "member" ONLY
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+// ============================================
+// PROJECT MODEL
+// ============================================
+model Project {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  color       String   @default("#3B82F6")
+  isPublic    Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  status      String   @default("active") // "active", "archived"
+  createdBy   String   // userId of creator
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tasks       Task[]
+  members     ProjectMember[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([tenantId])
+}
+
+// ============================================
+// PROJECT MEMBER MODEL
+// ============================================
+model ProjectMember {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role        String   @default("member") // "owner", "lead", "member", "viewer"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================
+// TASK MODEL
+// ============================================
+model Task {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  status      String   @default("todo") // "todo", "in-progress", "completed"
+  
+  assignedToId String?
+  assignedTo  User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([assignedToId])
+}
+
+// ============================================
+// FILE MODEL
+// ============================================
+model File {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  filename    String
+  url         String
+  mimeType    String?
+  size        Int?
+  
+  uploadedBy  String   // userId
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// ============================================
+// AUDIT LOG MODEL (Tamper-evident chain)
+// ============================================
+model AuditLog {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  userId          String?
+  user            User?    @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  
+  apiKeyId        String?
+  apiKey          ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  
+  action          String   // "user.created", "project.updated", "apikey.rotated", etc
+  resourceType    String?  // "user", "project", "workspace", "apikey"
+  resourceId      String?
+  
+  oldValue        Json?
+  newValue        Json?
+  
+  ipAddress       String?
+  httpMethod      String?
+  endpoint        String?
+  statusCode      Int?
+  
+  // Chain hashing: each entry linked to previous via hash
+  previousHash    String   @default("0000000000000000000000000000000000000000000000000000000000000000")
+  currentHash     String   @unique // SHA-256(content + previousHash)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([tenantId])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([currentHash])
+}
+
+// ============================================
+// RATE LIMIT EVENT MODEL (For metrics)
+// ============================================
+model RateLimitEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  apiKeyId    String
+  tier        String   // "global", "endpoint", "burst"
+  endpoint    String?
+  
+  limitValue  Int
+  currentCount Int
+  
+  triggeredAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([triggeredAt])
+}
+
+// ============================================
+// EMAIL DELIVERY LOG MODEL
+// ============================================
+model EmailDeliveryLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  jobId         String   // Bull job ID
+  recipient     String
+  template      String   // "USER_INVITED", "KEY_ROTATED", "RATE_LIMIT_WARNING"
+  
+  status        String   // "pending", "sent", "failed"
+  attemptCount  Int      @default(1)
+  
+  errorMessage  String?
+  previewUrl    String?
+  
+  nextRetryAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================
+// SESSION MODEL (For refresh tokens)
+// ============================================
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  
+  refreshToken  String   @unique
+  expiresAt     DateTime
+  
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================
+// EMAIL VALIDATION MODEL
+// ============================================
+model EmailValidation {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  token       String   @unique
+  expiresAt   DateTime
+  
+  createdAt   DateTime @default(now())
+}
+
+// ============================================
+// PASSWORD RESET MODEL
+// ============================================
+model PasswordReset {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique
+  expiresAt   DateTime
+  
+  createdAt   DateTime @default(now())
+}

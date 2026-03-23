@@ -1,0 +1,551 @@
+openapi: '3.0.3'
+info:
+  title: Multi-Tenant Project Management API
+  description: |
+    RESTful API for a multi-tenant project management system with tenant isolation via API keys,
+    tamper-evident audit trails, sliding window rate limiting, and queue-based email engine.
+  version: '1.0.0'
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: 'API key in format: vz_xxxx'
+    InternalKey:
+      type: apiKey
+      in: header
+      name: x-internal-key
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    Tenant:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [owner, member] }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Workspace:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        ownerId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        workspaceId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+        isPublic: { type: boolean }
+        isArchived: { type: boolean }
+        createdBy: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        projectId: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [todo, in-progress, completed] }
+        assignedToId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        userId: { type: string }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        previousHash: { type: string }
+        currentHash: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data: { type: array, items: {} }
+        nextCursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns server health status including DB, Redis connectivity and avg response time
+      security: []
+      tags: [Health]
+      responses:
+        '200':
+          description: Server is healthy
+        '503':
+          description: Server is unhealthy
+
+  /metrics:
+    get:
+      summary: Server metrics (internal only)
+      description: Returns detailed server metrics including per-tenant billing-period stats
+      security:
+        - BearerAuth: []
+      tags: [Health]
+      responses:
+        '200':
+          description: Metrics data
+
+  /auth/register:
+    post:
+      summary: Register new tenant with owner
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantName, tenantSlug, ownerEmail, ownerName, password]
+              properties:
+                tenantName: { type: string }
+                tenantSlug: { type: string }
+                ownerEmail: { type: string }
+                ownerName: { type: string }
+                password: { type: string }
+      responses:
+        '201':
+          description: Tenant and owner created
+        '409':
+          description: Tenant slug already exists
+
+  /auth/login:
+    post:
+      summary: Login with email and password
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, tenantSlug]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                tenantSlug: { type: string }
+      responses:
+        '200':
+          description: Login successful, returns JWT tokens
+        '401':
+          description: Invalid credentials
+
+  /auth/api-keys:
+    post:
+      summary: Create new API key
+      tags: [Authentication]
+      responses:
+        '201':
+          description: API key created (shown only once)
+    get:
+      summary: List API keys for tenant
+      tags: [Authentication]
+      responses:
+        '200':
+          description: List of API keys (hashes only, never raw keys)
+
+  /auth/api-keys/{keyId}/rotate:
+    post:
+      summary: Rotate API key (15-min grace period)
+      tags: [Authentication]
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Key rotated successfully
+
+  /workspaces:
+    get:
+      summary: List workspaces for current tenant
+      tags: [Workspaces]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated list of workspaces
+    post:
+      summary: Create workspace
+      tags: [Workspaces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        '201':
+          description: Workspace created
+
+  /workspaces/{workspaceId}:
+    get:
+      summary: Get workspace details
+      tags: [Workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workspace details
+    put:
+      summary: Update workspace (owner only)
+      tags: [Workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Workspace updated
+
+  /workspaces/{workspaceId}/members:
+    get:
+      summary: List workspace members
+      tags: [Workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of members
+    post:
+      summary: Add member to workspace (sends invite email)
+      tags: [Workspaces]
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, role]
+              properties:
+                userId: { type: string }
+                role: { type: string, enum: [owner, member] }
+      responses:
+        '201':
+          description: Member added and invite email sent
+
+  /projects:
+    get:
+      summary: List projects for tenant
+      tags: [Projects]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: archived
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Paginated list of projects
+    post:
+      summary: Create project
+      tags: [Projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, workspaceId]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                color: { type: string }
+                isPublic: { type: boolean }
+      responses:
+        '201':
+          description: Project created
+
+  /projects/{projectId}:
+    get:
+      summary: Get project details
+      tags: [Projects]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project details
+    put:
+      summary: Update project (owner only)
+      tags: [Projects]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project updated
+    delete:
+      summary: Archive/delete project
+      tags: [Projects]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project archived
+
+  /projects/{projectId}/members:
+    get:
+      summary: List project members
+      tags: [Projects]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of project members
+    post:
+      summary: Add member to project
+      tags: [Projects]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Member added
+
+  /projects/{projectId}/tasks:
+    get:
+      summary: List tasks in project
+      tags: [Tasks]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [todo, in-progress, completed] }
+        - name: assignedToId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated list of tasks
+    post:
+      summary: Create task in project
+      tags: [Tasks]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                status: { type: string }
+      responses:
+        '201':
+          description: Task created
+
+  /projects/{projectId}/tasks/{taskId}:
+    get:
+      summary: Get task details
+      tags: [Tasks]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task details
+    put:
+      summary: Update task
+      tags: [Tasks]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task updated
+    delete:
+      summary: Delete task
+      tags: [Tasks]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task deleted
+
+  /audit:
+    get:
+      summary: Query audit logs with filters and cursor-based pagination
+      tags: [Audit]
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+        - name: actionType
+          in: query
+          schema: { type: string }
+        - name: resourceType
+          in: query
+          schema: { type: string }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date-time }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Paginated audit logs
+
+  /audit/verify:
+    get:
+      summary: Verify audit chain integrity
+      description: Recomputes SHA-256 chain hashes and returns the brokenAtId if tampered
+      tags: [Audit]
+      responses:
+        '200':
+          description: Chain verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+                  totalEntries: { type: integer }
+                  brokenAtId: { type: string, nullable: true }
+                  lastVerified: { type: string, format: date-time }
+
+  /files:
+    post:
+      summary: Upload file
+      tags: [Files]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: File uploaded
