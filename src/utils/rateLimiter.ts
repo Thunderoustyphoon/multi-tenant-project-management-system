@@ -1,5 +1,6 @@
 import { createClient } from 'redis';
 import { queueEmail } from '../queues/email.queue';
+import prisma from '../config/prisma';
 import logger from './logger';
 
 export interface RateLimitConfig {
@@ -187,11 +188,19 @@ export class SlidingWindowRateLimiter {
     // Extract tenantId from identifier (format: "tenant:xxx")
     const tenantId = identifier.startsWith('tenant:') ? identifier.substring(7) : identifier;
 
-    // Queue warning email
+    // Queue warning email — resolve tenant owner email from database
     try {
+      // Look up the tenant owner's email
+      const tenantOwner = await prisma.user.findFirst({
+        where: { tenantId, role: 'owner' },
+        select: { email: true }
+      });
+
+      const ownerEmail = tenantOwner?.email || 'admin@tenant.example.com';
+
       await queueEmail({
         tenantId,
-        to: 'admin@tenant.example.com', // Will be resolved by email service
+        to: ownerEmail,
         subject: 'Rate Limit Warning: 80% threshold reached',
         htmlContent: `
           <h1>Rate Limit Warning</h1>

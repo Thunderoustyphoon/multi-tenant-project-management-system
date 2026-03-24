@@ -79,6 +79,27 @@ export async function extractTenantFromApiKey(
     req.tenant = apiKeyRecord.tenant;
     req.apiKey = apiKeyRecord as TenantRequest['apiKey'];
 
+    // Resolve the user who created this API key and attach to req.user
+    // This is critical: all owner-only operations check req.user?.role
+    const apiKeyUser = await prisma.user.findUnique({
+      where: { id: apiKeyRecord.createdBy }
+    });
+
+    if (apiKeyUser) {
+      req.user = {
+        id: apiKeyUser.id,
+        tenantId: apiKeyUser.tenantId,
+        email: apiKeyUser.email,
+        name: apiKeyUser.name,
+        passwordHash: apiKeyUser.passwordHash,
+        role: apiKeyUser.role as 'owner' | 'member',
+        isEmailVerified: apiKeyUser.isEmailVerified,
+        status: (apiKeyUser.status || 'active') as 'active' | 'suspended' | 'invited',
+        createdAt: apiKeyUser.createdAt,
+        updatedAt: apiKeyUser.updatedAt,
+      };
+    }
+
     // Update last used timestamp
     await prisma.apiKey.update({
       where: { id: apiKeyRecord.id },

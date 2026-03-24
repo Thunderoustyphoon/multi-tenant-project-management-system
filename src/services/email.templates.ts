@@ -5,8 +5,9 @@
  */
 
 export interface EmailTemplate {
-  subject: string | ((...args: any[]) => string);
-  body: (...args: any[]) => string;
+  subject: string | ((...args: string[]) => string) | (() => string);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  body: Function;
 }
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {

@@ -2,7 +2,6 @@ import prisma from '../../config/prisma';
 import { createAuditLog } from '../../utils/audit.utils';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../middlewares/error.middleware';
 import { CreateProjectInput, UpdateProjectInput, AddProjectMemberInput, UpdateProjectMemberInput } from './project.validation';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Project Service
@@ -21,7 +20,6 @@ export class ProjectService {
   ) {
     const project = await prisma.project.create({
       data: {
-        id: `proj_${uuidv4()}`,
         tenantId,
         workspaceId: input.workspaceId,
         name: input.name,

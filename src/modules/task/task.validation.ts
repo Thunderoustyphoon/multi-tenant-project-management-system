@@ -33,7 +33,7 @@ export const listTasksSchema = z.object({
   status: z.enum(['todo', 'in-progress', 'completed']).optional(),
   assignedToId: z.string().cuid().optional(),
   cursor: z.string().optional(),
-  limit: z.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

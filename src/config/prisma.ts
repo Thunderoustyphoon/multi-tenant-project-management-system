@@ -6,15 +6,7 @@ const prisma = new PrismaClient({
     : ['error']
 });
 
-// Handle shutdown gracefully
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
-});
+// Shutdown is handled centrally in server.ts (startServer)
+// Removed duplicate SIGINT/SIGTERM handlers that would exit prematurely
 
 export default prisma;

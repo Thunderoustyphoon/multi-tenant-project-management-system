@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/prisma';
 import { getRedis } from '../config/redis';
 import { getQueueStats } from '../queues/email.queue';
@@ -12,7 +12,7 @@ import { responseTracker } from '../middlewares/responseTracker.middleware';
  * Spec: must include "average response time over the last 60 seconds"
  */
 export async function healthCheck(req: Request, res: Response) {
-  const checks: Record<string, any> = {
+  const checks: Record<string, unknown> = {
     status: 'starting',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
@@ -78,7 +78,7 @@ export async function healthCheck(req: Request, res: Response) {
   }
 
   // Overall status
-  const allHealthy = checks.database?.status === 'connected' && checks.redis?.status === 'connected';
+  const allHealthy = (checks.database as Record<string, unknown>)?.status === 'connected' && (checks.redis as Record<string, unknown>)?.status === 'connected';
   checks.status = allHealthy ? 'healthy' : 'unhealthy';
 
   const statusCode = allHealthy ? 200 : 503;
@@ -91,11 +91,11 @@ export async function healthCheck(req: Request, res: Response) {
  * Detailed metrics endpoint (internal API key only)
  * Spec: must include per-tenant billing-period stats
  */
-export async function getMetrics(req: TenantRequest, res: Response, next: any): Promise<void> {
+export async function getMetrics(req: TenantRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     // Auth is handled by verifyInternalKey middleware on the route
 
-    const metrics: Record<string, any> = {
+    const metrics: Record<string, unknown> = {
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       version: process.env.VERSION || '1.0.0'
@@ -189,7 +189,7 @@ export async function getMetrics(req: TenantRequest, res: Response, next: any): 
       const billingPeriodStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const tenants = await prisma.tenant.findMany({ select: { id: true, name: true } });
 
-      const perTenantStats: Record<string, any> = {};
+      const perTenantStats: Record<string, unknown> = {};
       for (const tenant of tenants) {
         const [rateLimitBreaches, emailLogs] = await Promise.all([
           prisma.rateLimitEvent.count({
@@ -202,12 +202,12 @@ export async function getMetrics(req: TenantRequest, res: Response, next: any): 
           }),
         ]);
 
-        const emailStats = emailLogs.reduce((acc: any, log: any) => {
+        const emailStats = emailLogs.reduce((acc: Record<string, number>, log: { status: string; _count: number }) => {
           acc[log.status] = log._count;
           return acc;
-        }, {});
+        }, {} as Record<string, number>);
 
-        const totalEmails = Object.values(emailStats).reduce((a: any, b: any) => a + b, 0) as number;
+        const totalEmails = Object.values(emailStats).reduce((a: number, b: number) => a + b, 0);
         const sentEmails = emailStats['sent'] || 0;
 
         perTenantStats[tenant.id] = {
@@ -235,7 +235,7 @@ export async function getMetrics(req: TenantRequest, res: Response, next: any): 
  * GET /status/:tenantId
  * Get tenant-specific status
  */
-export async function getTenantStatus(req: TenantRequest, res: Response, next: any): Promise<void> {
+export async function getTenantStatus(req: TenantRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.tenant) {
       throw new UnauthorizedError('Tenant context required');
@@ -278,7 +278,7 @@ export async function getTenantStatus(req: TenantRequest, res: Response, next: a
  * GET /status/:tenantId/usage
  * Get tenant usage statistics
  */
-export async function getTenantUsage(req: TenantRequest, res: Response, next: any): Promise<void> {
+export async function getTenantUsage(req: TenantRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.tenant) {
       throw new UnauthorizedError('Tenant context required');

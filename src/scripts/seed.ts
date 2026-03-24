@@ -284,18 +284,25 @@ async function seed() {
       
       // === Pre-populate rate limit scenarios (spec requirement) ===
       logger.info('  Creating rate limit scenarios...');
-      await prisma.rateLimitEvent.create({
-        data: {
-          tenantId: tenant.id,
-          limitType: 'BURST',
-          endpoint: '/api/projects',
-          ipAddress: '192.168.1.1',
-          identifier: `key:${hashedKey}`,
-          requestCount: 51,
-          limit: 50,
-          windowMs: 5000
-        }
+
+      // Get the API key we just created to reference its ID
+      const createdApiKey = await prisma.apiKey.findFirst({
+        where: { tenantId: tenant.id },
+        select: { id: true }
       });
+
+      if (createdApiKey) {
+        await prisma.rateLimitEvent.create({
+          data: {
+            tenantId: tenant.id,
+            apiKeyId: createdApiKey.id,
+            tier: 'BURST',
+            endpoint: '/api/projects',
+            limitValue: 50,
+            currentCount: 51,
+          }
+        });
+      }
       logger.info('  ✓ Created rate limit burst event');
     }
 

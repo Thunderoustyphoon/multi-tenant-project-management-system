@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
 import { generateSHA256Hash } from './crypto';
 import logger from './logger';
@@ -17,8 +17,8 @@ export async function createAuditLog(
     action: string;
     resourceType?: string;
     resourceId?: string;
-    oldValue?: Record<string, unknown>;
-    newValue?: Record<string, unknown>;
+    oldValue?: Prisma.InputJsonValue;
+    newValue?: Prisma.InputJsonValue;
     ipAddress?: string;
     httpMethod?: string;
     endpoint?: string;
@@ -34,6 +34,10 @@ export async function createAuditLog(
 
   const previousHash = previousEntry?.currentHash || '0'.repeat(64);
 
+  // Fix: Generate timestamp BEFORE hash computation and pass it to Prisma
+  // so that createdAt matches exactly what was hashed (avoids verification mismatch)
+  const timestamp = new Date();
+
   // Build content for hashing (must be deterministic)
   const entryContent = {
     action: data.action,
@@ -47,14 +51,14 @@ export async function createAuditLog(
     httpMethod: data.httpMethod,
     endpoint: data.endpoint,
     statusCode: data.statusCode,
-    timestamp: new Date().toISOString()
+    timestamp: timestamp.toISOString()
   };
 
   // Compute chain hash: SHA256(content + previousHash)
   const contentString = JSON.stringify(entryContent);
   const currentHash = generateSHA256Hash(contentString + previousHash);
 
-  // Store audit log with chain
+  // Store audit log with chain — explicitly set createdAt to match hashed timestamp
   const auditLog = await tx.auditLog.create({
     data: {
       tenantId: data.tenantId,
@@ -70,7 +74,8 @@ export async function createAuditLog(
       endpoint: data.endpoint,
       statusCode: data.statusCode,
       previousHash,
-      currentHash
+      currentHash,
+      createdAt: timestamp
     }
   });
 
@@ -194,7 +199,7 @@ export async function queryAuditLogs(
   const limit = Math.min(pagination.limit, 100); // Max 100 per page
 
   // Build where clause
-  const where: Record<string, unknown> & { createdAt?: { gte?: Date; lte?: Date }; AND?: unknown[] } = { tenantId };
+  const where: Prisma.AuditLogWhereInput = { tenantId };
 
   if (filters.userId) where.userId = filters.userId;
   if (filters.actionType) where.action = filters.actionType;
@@ -222,11 +227,11 @@ export async function queryAuditLogs(
     where.AND = [
       {
         OR: [
-          { createdAt: { gt: cursorCriteria.createdAt } },
+          { createdAt: { lt: cursorCriteria.createdAt } },
           {
             AND: [
               { createdAt: { equals: cursorCriteria.createdAt } },
-              { id: { gt: cursorCriteria.id } }
+              { id: { lt: cursorCriteria.id } }
             ]
           }
         ]

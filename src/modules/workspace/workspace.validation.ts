@@ -37,7 +37,7 @@ export const updateWorkspaceMemberSchema = z.object({
  */
 export const listWorkspacesSchema = z.object({
   cursor: z.string().optional(),
-  limit: z.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;

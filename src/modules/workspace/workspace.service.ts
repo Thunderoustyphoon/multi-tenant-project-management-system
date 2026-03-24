@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import { createAuditLog } from '../../utils/audit.utils';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../middlewares/error.middleware';
 import { EmailService } from '../../services/email.service';
@@ -189,7 +189,7 @@ export class WorkspaceService {
       action: 'WORKSPACE_UPDATED',
       resourceType: 'Workspace',
       resourceId: workspaceId,
-      newValue: data as Record<string, unknown>,
+      newValue: data as Prisma.InputJsonValue,
     });
 
     return workspace;
@@ -219,9 +219,17 @@ export class WorkspaceService {
       data: { status: 'archived' },
     });
 
-    // Delete workspace (cascade will handle members)
-    const workspace = await prisma.workspace.delete({
+    // Soft-delete: archive the workspace instead of permanently deleting it
+    const currentWorkspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
+      select: { name: true }
+    });
+
+    const workspace = await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { 
+        name: `[ARCHIVED] ${currentWorkspace?.name || workspaceId}`,
+      },
     });
 
     // Audit log — correct signature

@@ -6,6 +6,7 @@ import { ValidationError, ConflictError, UnauthorizedError, ForbiddenError } fro
 import { createAuditLog } from '../../utils/audit.utils';
 import { EmailService } from '../../services/email.service';
 import prisma from '../../config/prisma';
+import logger from '../../utils/logger';
 
 const authService = new AuthService();
 
@@ -57,7 +58,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
         result.tenant.name
       );
     } catch (emailErr) {
-      console.error('Failed to queue welcome email:', emailErr);
+      logger.error('Failed to queue welcome email:', emailErr);
       // Don't fail registration if email queuing fails
     }
 
@@ -206,7 +207,7 @@ export async function rotateApiKey(req: TenantRequest, res: Response, next: Next
         result.graceExpiresAt
       );
     } catch (emailErr) {
-      console.error('Failed to queue API key rotation email:', emailErr);
+      logger.error('Failed to queue API key rotation email:', emailErr);
       // Don't fail rotation if email queuing fails
     }
 
@@ -265,7 +266,7 @@ export async function listApiKeys(req: TenantRequest, res: Response, next: NextF
       message: 'API keys retrieved successfully',
       data: {
         totalKeys: keys.length,
-        keys: keys.map((key: any) => ({
+        keys: keys.map((key: { id: string; name?: string; status: string; createdBy: string; createdAt: Date; isActive: boolean; lastUsedAt: Date | null; gracePeriodEnds?: Date | null; oldKeyExpiresAt?: Date | null }) => ({
           id: key.id,
           name: key.name,
           prefix: 'vz_',

@@ -22,14 +22,8 @@ export async function initializeRedis(): Promise<RedisClientType> {
 
   await redis.connect();
 
-  // Handle shutdown
-  process.on('SIGINT', async () => {
-    if (redis) await redis.disconnect();
-  });
-
-  process.on('SIGTERM', async () => {
-    if (redis) await redis.disconnect();
-  });
+  // Shutdown is handled centrally in server.ts (startServer)
+  // Removed duplicate SIGINT/SIGTERM handlers
 
   return redis;
 }

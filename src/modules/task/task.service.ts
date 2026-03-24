@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma';
+import type { Prisma } from '@prisma/client';
 import { createAuditLog } from '../../utils/audit.utils';
 import { ForbiddenError, NotFoundError } from '../../middlewares/error.middleware';
 import type { CreateTaskInput, UpdateTaskInput, AssignTaskInput } from './task.validation';
@@ -222,7 +223,7 @@ export class TaskService {
         title: existingTask.title,
         status: existingTask.status,
       },
-      newValue: data as Record<string, unknown>,
+      newValue: data as Prisma.InputJsonValue,
     });
 
     return task;

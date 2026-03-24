@@ -49,7 +49,7 @@ export async function uploadFile(req: AuthenticatedRequest, res: Response, next:
 export async function listFiles(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const limit = Math.min(parseInt(String(req.query.limit)) || 20, 100);
-    const cursor = String(req.query.cursor) || undefined;
+    const cursor = (req.query.cursor as string) || undefined;
 
     const result = await FileUploadService.listFiles(
       req.tenant!.id,

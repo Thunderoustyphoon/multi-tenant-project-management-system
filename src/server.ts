@@ -6,7 +6,8 @@ import cors from 'cors';
 import prisma from './config/prisma';
 import { initializeRedis, getRedis } from './config/redis';
 import { errorHandler } from './middlewares/error.middleware';
-import { rateLimitMiddleware } from './middlewares/rateLimit.middleware';
+// Rate limit middleware is applied per-route, not globally
+// import { rateLimitMiddleware } from './middlewares/rateLimit.middleware';
 import { responseTimeMiddleware } from './middlewares/responseTracker.middleware';
 import { rateLimiter } from './utils/rateLimiter';
 import logger from './utils/logger';
@@ -49,8 +50,8 @@ app.use((req: TenantRequest, res, next) => {
   next();
 });
 
-// Rate limiting middleware (3-tier: global, endpoint-specific, burst)
-app.use(rateLimitMiddleware);
+// Rate limiting is applied per-route (project routes, task routes, etc.)
+// NOT globally — tenant/API key context isn't available here yet
 
 // API routes (includes /health, /metrics, /status endpoints)
 app.use('/api', routes);
@@ -69,18 +70,8 @@ app.use((req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  logger.info('Shutting down gracefully...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down gracefully...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
+// Graceful shutdown is handled in startServer() below
+// (removed duplicate handlers that would exit before queue shutdown)
 
 // Start server
 async function startServer() {

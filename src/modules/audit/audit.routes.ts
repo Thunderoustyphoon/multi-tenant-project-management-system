@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { tenantExtractorMiddleware } from '../../middlewares/tenantExtractor.middleware';
 import { ForbiddenError, NotFoundError } from '../../middlewares/error.middleware';
-import { queryAuditLogs, verifyAuditChain } from '../../utils/audit.utils';
+import { queryAuditLogs, verifyAuditChain, createAuditLog } from '../../utils/audit.utils';
 import { TenantRequest } from '../../types';
 import prisma from '../../config/prisma';
 
@@ -119,23 +119,21 @@ export async function verifyAuditChainEndpoint(req: TenantRequest, res: Response
     // Verify the chain
     const result = await verifyAuditChain(req.tenant.id);
 
-    // Log this verification attempt
-    await prisma.auditLog.create({
-      data: {
-        tenantId: req.tenant.id,
-        userId: req.user?.id,
-        action: 'AUDIT_CHAIN_VERIFIED',
-        resourceType: 'AuditLog',
-        newValue: {
-          valid: result.valid,
-          totalEntries: result.totalEntries,
-          ...(result.brokenAtId && { brokenAtId: result.brokenAtId })
-        },
-        ipAddress: req.ip,
-        httpMethod: 'GET',
-        endpoint: '/api/audit/verify',
-        statusCode: 200
-      }
+    // Log this verification attempt using createAuditLog to maintain chain integrity
+    await createAuditLog(prisma, {
+      tenantId: req.tenant.id,
+      userId: req.user?.id,
+      action: 'AUDIT_CHAIN_VERIFIED',
+      resourceType: 'AuditLog',
+      newValue: {
+        valid: result.valid,
+        totalEntries: result.totalEntries,
+        ...(result.brokenAtId && { brokenAtId: result.brokenAtId })
+      },
+      ipAddress: req.ip,
+      httpMethod: 'GET',
+      endpoint: '/api/audit/verify',
+      statusCode: 200
     });
 
     res.json({
@@ -238,30 +236,28 @@ export async function exportAuditLogs(req: TenantRequest, res: Response, next: N
       orderBy: { createdAt: 'asc' }
     });
 
-    // Log the export action
-    await prisma.auditLog.create({
-      data: {
-        tenantId: req.tenant.id,
-        userId: req.user?.id,
-        action: 'AUDIT_LOGS_EXPORTED',
-        resourceType: 'AuditLog',
-        newValue: {
-          format,
-          count: logs.length,
-          dateRange: { startDate, endDate }
-        },
-        ipAddress: req.ip,
-        httpMethod: 'GET',
-        endpoint: '/api/audit/export',
-        statusCode: 200
-      }
+    // Log the export action using createAuditLog to maintain chain integrity
+    await createAuditLog(prisma, {
+      tenantId: req.tenant.id,
+      userId: req.user?.id,
+      action: 'AUDIT_LOGS_EXPORTED',
+      resourceType: 'AuditLog',
+      newValue: {
+        format,
+        count: logs.length,
+        dateRange: { startDate, endDate }
+      },
+      ipAddress: req.ip,
+      httpMethod: 'GET',
+      endpoint: '/api/audit/export',
+      statusCode: 200
     });
 
     // Format output based on requested format
     if (format === 'csv') {
       // Simple CSV export
       const headers = ['id', 'action', 'resource_type', 'user_id', 'status_code', 'created_at'];
-      const rows = logs.map((log: any) => [
+      const rows = logs.map((log: { id: string; action: string; resourceType: string | null; userId: string | null; statusCode: number | null; createdAt: Date }) => [
         log.id,
         log.action,
         log.resourceType,
