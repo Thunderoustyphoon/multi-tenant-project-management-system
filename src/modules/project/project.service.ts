@@ -39,7 +39,7 @@ export class ProjectService {
       }
     });
 
-    // Log creation
+
     await createAuditLog(prisma, {
       tenantId,
       userId,
@@ -82,7 +82,7 @@ export class ProjectService {
       throw new NotFoundError('Project not found');
     }
 
-    // Check access: must be member or public project
+
     if (userId && !project.isPublic) {
       const isMember = project.members.some((m: { userId: string; role: string }) => m.userId === userId);
       if (!isMember) {
@@ -107,7 +107,7 @@ export class ProjectService {
   ) {
     const limit = Math.min(options?.limit || 20, 100);
 
-    // Build cursor filter
+
     let cursorFilter: Record<string, unknown> | undefined;
     if (options?.cursor) {
       try {
@@ -128,7 +128,7 @@ export class ProjectService {
       }
     }
 
-    // Get projects where user is member OR project is public
+
     const projects = await prisma.project.findMany({
       where: {
         tenantId,

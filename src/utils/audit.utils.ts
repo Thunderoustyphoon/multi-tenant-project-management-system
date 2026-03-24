@@ -25,7 +25,7 @@ export async function createAuditLog(
     statusCode?: number;
   }
 ) {
-  // Get previous audit entry for this tenant to build chain
+
   const previousEntry = await tx.auditLog.findFirst({
     where: { tenantId: data.tenantId },
     orderBy: { createdAt: 'desc' },
@@ -33,12 +33,9 @@ export async function createAuditLog(
   });
 
   const previousHash = previousEntry?.currentHash || '0'.repeat(64);
-
-  // Fix: Generate timestamp BEFORE hash computation and pass it to Prisma
-  // so that createdAt matches exactly what was hashed (avoids verification mismatch)
   const timestamp = new Date();
 
-  // Build content for hashing (must be deterministic)
+
   const entryContent = {
     action: data.action,
     resourceType: data.resourceType,
@@ -54,11 +51,11 @@ export async function createAuditLog(
     timestamp: timestamp.toISOString()
   };
 
-  // Compute chain hash: SHA256(content + previousHash)
+
   const contentString = JSON.stringify(entryContent);
   const currentHash = generateSHA256Hash(contentString + previousHash);
 
-  // Store audit log with chain — explicitly set createdAt to match hashed timestamp
+
   const auditLog = await tx.auditLog.create({
     data: {
       tenantId: data.tenantId,

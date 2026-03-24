@@ -1,7 +1,6 @@
 import argon2 from 'argon2';
-import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../config/prisma';
-import { generateApiKey, generateSHA256Hash, hashApiKey } from '../../utils/crypto';
+import { generateApiKey, hashApiKey } from '../../utils/crypto';
 import { createAuditLog } from '../../utils/audit.utils';
 import { ValidationError, ConflictError } from '../../middlewares/error.middleware';
 

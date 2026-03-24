@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { registerSchema, loginSchema, createApiKeySchema, rotateApiKeySchema } from './auth.validation';
 import { TenantRequest } from '../../types';
-import { ValidationError, ConflictError, UnauthorizedError, ForbiddenError } from '../../middlewares/error.middleware';
+import { ValidationError, UnauthorizedError, ForbiddenError } from '../../middlewares/error.middleware';
 import { createAuditLog } from '../../utils/audit.utils';
 import { EmailService } from '../../services/email.service';
 import prisma from '../../config/prisma';
@@ -32,7 +32,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
       tenantSlug
     });
 
-    // Log registration
+
     await createAuditLog(prisma, {
       tenantId: result.tenant.id,
       userId: result.user.id,
@@ -49,7 +49,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
       statusCode: 201
     });
 
-    // Send welcome email asynchronously (non-blocking)
+
     try {
       await EmailService.sendWelcomeEmail(
         result.tenant.id,
@@ -59,7 +59,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
       );
     } catch (emailErr) {
       logger.error('Failed to queue welcome email:', emailErr);
-      // Don't fail registration if email queuing fails
+  
     }
 
     res.status(201).json({
@@ -98,12 +98,12 @@ export async function register(req: Request, res: Response, next: NextFunction):
  */
 export async function generateApiKey(req: TenantRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    // Verify request has tenant context (set by tenantExtractor middleware)
+
     if (!req.tenant) {
       throw new UnauthorizedError('Tenant context not found');
     }
 
-    // Verify user is owner
+
     if (req.user?.role !== 'owner') {
       throw new ForbiddenError('Only tenant owners can generate API keys');
     }
@@ -117,7 +117,7 @@ export async function generateApiKey(req: TenantRequest, res: Response, next: Ne
 
     const result = await authService.generateApiKey(req.tenant.id, req.user?.id!);
 
-    // Log key generation
+
     await createAuditLog(prisma, {
       tenantId: req.tenant.id,
       userId: req.user?.id,

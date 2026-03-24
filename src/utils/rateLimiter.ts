@@ -188,19 +188,20 @@ export class SlidingWindowRateLimiter {
     // Extract tenantId from identifier (format: "tenant:xxx")
     const tenantId = identifier.startsWith('tenant:') ? identifier.substring(7) : identifier;
 
-    // Queue warning email — resolve tenant owner email from database
     try {
-      // Look up the tenant owner's email
       const tenantOwner = await prisma.user.findFirst({
         where: { tenantId, role: 'owner' },
         select: { email: true }
       });
 
-      const ownerEmail = tenantOwner?.email || 'admin@tenant.example.com';
+      if (!tenantOwner?.email) {
+        logger.warn(`No owner email found for tenant ${tenantId}, skipping rate limit warning`);
+        return;
+      }
 
       await queueEmail({
         tenantId,
-        to: ownerEmail,
+        to: tenantOwner.email,
         subject: 'Rate Limit Warning: 80% threshold reached',
         htmlContent: `
           <h1>Rate Limit Warning</h1>

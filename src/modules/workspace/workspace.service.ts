@@ -12,7 +12,7 @@ export class WorkspaceService {
    * Creator automatically becomes owner
    */
   static async createWorkspace(tenantId: string, userId: string, data: CreateWorkspaceInput) {
-    // Check if workspace name already exists in tenant
+
     const existingWorkspace = await prisma.workspace.findFirst({
       where: {
         tenantId,
@@ -24,7 +24,7 @@ export class WorkspaceService {
       throw new ConflictError('Workspace name already exists in this tenant');
     }
 
-    // Create workspace and add creator as owner
+
     const workspace = await prisma.$transaction(async (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => {
       const ws = await tx.workspace.create({
         data: {
@@ -35,7 +35,7 @@ export class WorkspaceService {
         },
       });
 
-      // Add creator as owner member
+
       await tx.workspaceMember.create({
         data: {
           workspaceId: ws.id,
@@ -44,7 +44,7 @@ export class WorkspaceService {
         },
       });
 
-      // Audit log — correct signature
+
       await createAuditLog(tx, {
         tenantId,
         userId,
@@ -67,7 +67,7 @@ export class WorkspaceService {
    * Get workspace with member info
    */
   static async getWorkspace(tenantId: string, workspaceId: string, userId: string) {
-    // Verify user has access to workspace
+
     const member = await prisma.workspaceMember.findUnique({
       where: {
         workspaceId_userId: {
@@ -163,7 +163,7 @@ export class WorkspaceService {
     userId: string,
     data: UpdateWorkspaceInput
   ) {
-    // Check user is owner
+
     const member = await prisma.workspaceMember.findUnique({
       where: {
         workspaceId_userId: {
@@ -182,7 +182,7 @@ export class WorkspaceService {
       data,
     });
 
-    // Audit log — correct signature
+
     await createAuditLog(prisma, {
       tenantId,
       userId,
@@ -199,7 +199,7 @@ export class WorkspaceService {
    * Archive workspace (owner-only)
    */
   static async archiveWorkspace(tenantId: string, workspaceId: string, userId: string) {
-    // Check user is owner
+
     const member = await prisma.workspaceMember.findUnique({
       where: {
         workspaceId_userId: {
@@ -213,13 +213,13 @@ export class WorkspaceService {
       throw new ForbiddenError('Only workspace owners can archive workspace');
     }
 
-    // Archive all projects in workspace
+
     await prisma.project.updateMany({
       where: { workspaceId },
       data: { status: 'archived' },
     });
 
-    // Soft-delete: archive the workspace instead of permanently deleting it
+
     const currentWorkspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { name: true }
@@ -232,7 +232,7 @@ export class WorkspaceService {
       },
     });
 
-    // Audit log — correct signature
+
     await createAuditLog(prisma, {
       tenantId,
       userId,

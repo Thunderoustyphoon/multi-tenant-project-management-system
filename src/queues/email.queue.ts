@@ -152,18 +152,18 @@ async function processEmailJob(job: Bull.Job<EmailJob>): Promise<void> {
     logger.info(`Processing email job: ${job.id}`);
     logger.info(`To: ${to}, Subject: ${subject}`);
 
-    // Get Ethereal transport
+
     const transporter = await getEtherealTransport();
 
-    // Send email via Nodemailer
+
     const info = await transporter.sendMail({
-      from: '"Multi-Tenant PM" <noreply@mtpm.example.com>',
+      from: process.env.EMAIL_FROM || '"Multi-Tenant PM" <noreply@mtpm.local>',
       to,
       subject,
       html: htmlContent,
     });
 
-    // Log preview URL (spec requirement)
+
     const previewUrl = nodemailer.getTestMessageUrl(info);
     if (previewUrl) {
       logger.info(`Email preview URL: ${previewUrl}`);

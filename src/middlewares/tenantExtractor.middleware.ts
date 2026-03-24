@@ -15,7 +15,7 @@ export async function extractTenantFromApiKey(
   next: NextFunction
 ) {
   try {
-    // Skip tenant extraction for health endpoint
+
     if (req.path === '/health' || req.path === '/') {
       return next();
     }
@@ -26,14 +26,14 @@ export async function extractTenantFromApiKey(
       throw new UnauthorizedError('Missing or invalid API key');
     }
 
-    const rawKey = authHeader.substring(7); // Remove "Bearer " prefix
+    const rawKey = authHeader.substring(7);
 
-    // Verify key format
+
     if (!rawKey.startsWith('vz_')) {
       throw new UnauthorizedError('Invalid API key format');
     }
 
-    // Fetch all active API keys and verify using Argon2
+
     const apiKeys = await prisma.apiKey.findMany({
       where: { isActive: true },
       include: { tenant: true }
@@ -41,7 +41,7 @@ export async function extractTenantFromApiKey(
 
     let apiKeyRecord: { id: string; tenantId: string; keyHash: string; createdBy: string; createdAt: Date; oldKeyHash?: string | null; oldKeyExpiresAt?: Date | null; isActive: boolean; tenant: { id: string; name: string; slug: string; createdAt: Date; updatedAt: Date } } | null = null;
 
-    // Check current active keys using Argon2 verification
+
     for (const record of apiKeys) {
       const isValid = await verifyApiKey(rawKey, record.keyHash);
       if (isValid) {
@@ -50,7 +50,7 @@ export async function extractTenantFromApiKey(
       }
     }
 
-    // If not found in current keys, check old keys during grace period
+    // Check old keys during grace period
     if (!apiKeyRecord) {
       const graceKeys = await prisma.apiKey.findMany({
         where: {
@@ -75,12 +75,11 @@ export async function extractTenantFromApiKey(
       throw new UnauthorizedError('Invalid API key');
     }
 
-    // Attach tenant and API key to request
+
     req.tenant = apiKeyRecord.tenant;
     req.apiKey = apiKeyRecord as TenantRequest['apiKey'];
 
-    // Resolve the user who created this API key and attach to req.user
-    // This is critical: all owner-only operations check req.user?.role
+
     const apiKeyUser = await prisma.user.findUnique({
       where: { id: apiKeyRecord.createdBy }
     });
@@ -100,13 +99,13 @@ export async function extractTenantFromApiKey(
       };
     }
 
-    // Update last used timestamp
+
     await prisma.apiKey.update({
       where: { id: apiKeyRecord.id },
       data: { lastUsedAt: new Date() }
     });
 
-    // Store IP address for audit logging
+
     req.ipAddress = req.ip || 'unknown';
 
     next();
