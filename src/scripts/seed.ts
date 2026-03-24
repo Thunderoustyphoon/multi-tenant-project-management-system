@@ -184,7 +184,7 @@ async function seed() {
       // Create workspaces
       let auditCount = 5;
       for (const wsData of DEMO_WORKSPACES) {
-        console.log(`  Creating workspace: ${wsData.name}`);
+        logger.info(`  Creating workspace: ${wsData.name}`);
 
         const workspace = await prisma.workspace.create({
           data: {
@@ -219,7 +219,7 @@ async function seed() {
 
         // Create projects
         for (const projData of DEMO_PROJECTS) {
-          console.log(`    Creating project: ${projData.name}`);
+          logger.info(`    Creating project: ${projData.name}`);
 
           const project = await prisma.project.create({
             data: {
@@ -280,10 +280,10 @@ async function seed() {
         }
       }
 
-      console.log(`  ✓ Created ${auditCount} audit log entries for ${tenant.name}`);
+      logger.info(`  ✓ Created ${auditCount} audit log entries for ${tenant.name}`);
       
       // === Pre-populate rate limit scenarios (spec requirement) ===
-      console.log('  Creating rate limit scenarios...');
+      logger.info('  Creating rate limit scenarios...');
       await prisma.rateLimitEvent.create({
         data: {
           tenantId: tenant.id,
@@ -296,7 +296,7 @@ async function seed() {
           windowMs: 5000
         }
       });
-      console.log('  ✓ Created rate limit burst event');
+      logger.info('  ✓ Created rate limit burst event');
     }
 
     logger.info('Database seeded successfully!');
