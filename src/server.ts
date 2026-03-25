@@ -3,6 +3,10 @@ import express, { Express } from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import YAML from 'yaml';
+import swaggerUi from 'swagger-ui-express';
 import prisma from './config/prisma';
 import { initializeRedis, getRedis } from './config/redis';
 import { errorHandler } from './middlewares/error.middleware';
@@ -18,6 +22,10 @@ import routes from './routes';
 
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
+
+// ---------- Load OpenAPI spec ----------
+const openapiPath = path.resolve(__dirname, '..', 'openapi.yaml');
+const openapiDocument = YAML.parse(fs.readFileSync(openapiPath, 'utf8'));
 
 // Security middleware
 app.use(helmet({
@@ -52,6 +60,23 @@ app.use((req: TenantRequest, res, next) => {
 
 // Rate limiting is applied per-route (project routes, task routes, etc.)
 // NOT globally — tenant/API key context isn't available here yet
+
+// ---------- API Documentation (Swagger UI) ----------
+// Browse interactive docs at: http://localhost:3000/docs
+// Raw JSON spec available at: http://localhost:3000/api-docs.json
+app.get('/api-docs.json', (_req, res) => {
+  res.json(openapiDocument);
+});
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiDocument, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Multi-Tenant PM API Docs',
+  swaggerOptions: {
+    persistAuthorization: true,
+    docExpansion: 'list',
+    filter: true,
+    tagsSorterAlpha: true,
+  },
+}));
 
 // API routes (includes /health, /metrics, /status endpoints)
 app.use('/api', routes);
