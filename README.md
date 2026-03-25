@@ -95,8 +95,18 @@ npm run dev
 
 5. **Health Check**
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3000/api/health
 ```
+
+6. **Browse API Documentation**
+
+   Open [http://localhost:3000/docs](http://localhost:3000/docs) in your browser to launch the **Swagger UI** interactive explorer. From there you can:
+   - Browse every endpoint grouped by tag (Auth, Workspaces, Projects, Tasks, Audit, Files)
+   - Click **Authorize** 🔒 and enter your Bearer token (`vz_xxxx`) to test authenticated routes
+   - Hit **Try it out** on any endpoint to send real requests and see live responses
+   - Use the search/filter bar to quickly find endpoints
+
+   > The raw OpenAPI spec is also available as JSON at [http://localhost:3000/api-docs.json](http://localhost:3000/api-docs.json) — useful for importing into Postman or generating client SDKs.
 
 ### Docker Setup
 
@@ -117,6 +127,16 @@ docker-compose logs -f app
 ```
 
 ## 📖 API Documentation
+
+### 🔗 Interactive API Explorer (Swagger UI)
+
+| Resource | URL | Description |
+|---|---|---|
+| **Swagger UI** | [localhost:3000/docs](http://localhost:3000/docs) | Interactive docs — browse, authorize & test all endpoints |
+| **OpenAPI JSON** | [localhost:3000/api-docs.json](http://localhost:3000/api-docs.json) | Raw spec — import into Postman, Insomnia, or code generators |
+| **OpenAPI YAML** | [`openapi.yaml`](./openapi.yaml) | Source-of-truth spec file in the repo |
+
+> **Tip:** Click the **Authorize** button in Swagger UI, paste your `vz_xxxx` API key, and you can test every endpoint directly from the browser — no curl or Postman needed.
 
 ### Authentication
 
@@ -548,6 +568,7 @@ MIT License - see LICENSE file for details
 
 ## 📧 Support
 
-- Documentation: [API Docs](./docs/API.md)
+- Interactive Docs: [Swagger UI](http://localhost:3000/docs) (run `npm run dev` first)
+- OpenAPI Spec: [`openapi.yaml`](./openapi.yaml)
 - Issues: [GitHub Issues](./issues)
 - Email: support@example.com
