@@ -261,10 +261,14 @@ export class TaskService {
         where: { id: projectId, tenantId },
       });
 
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
       const targetMember = await prisma.workspaceMember.findUnique({
         where: {
           workspaceId_userId: {
-            workspaceId: project!.workspaceId,
+            workspaceId: project.workspaceId,
             userId: data.assignedToId,
           },
         },

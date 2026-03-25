@@ -230,8 +230,12 @@ export async function exportAuditLogs(req: TenantRequest, res: Response, next: N
     const logs = await prisma.auditLog.findMany({
       where: {
         tenantId: req.tenant.id,
-        ...(startDate && { createdAt: { gte: new Date(startDate) } }),
-        ...(endDate && { createdAt: { lte: new Date(endDate) } })
+        ...((startDate || endDate) && {
+          createdAt: {
+            ...(startDate && { gte: new Date(startDate) }),
+            ...(endDate && { lte: new Date(endDate) }),
+          },
+        }),
       },
       orderBy: { createdAt: 'asc' }
     });
@@ -255,15 +259,23 @@ export async function exportAuditLogs(req: TenantRequest, res: Response, next: N
 
     // Format output based on requested format
     if (format === 'csv') {
-      // Simple CSV export
+      // Simple CSV export with proper escaping to prevent CSV injection
       const headers = ['id', 'action', 'resource_type', 'user_id', 'status_code', 'created_at'];
+      const escapeCsv = (val: unknown): string => {
+        const str = val == null ? '' : String(val);
+        // Quote fields that contain commas, quotes, newlines, or formula injection chars
+        if (/[,"\n\r=+\-@]/.test(str)) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
       const rows = logs.map((log: { id: string; action: string; resourceType: string | null; userId: string | null; statusCode: number | null; createdAt: Date }) => [
-        log.id,
-        log.action,
-        log.resourceType,
-        log.userId,
-        log.statusCode,
-        log.createdAt.toISOString()
+        escapeCsv(log.id),
+        escapeCsv(log.action),
+        escapeCsv(log.resourceType),
+        escapeCsv(log.userId),
+        escapeCsv(log.statusCode),
+        escapeCsv(log.createdAt.toISOString())
       ]);
 
       const csv = [headers, ...rows].map(row => row.join(',')).join('\n');

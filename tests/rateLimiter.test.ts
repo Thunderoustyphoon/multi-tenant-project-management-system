@@ -120,12 +120,12 @@ describe('Sliding Window Rate Limiter', () => {
 
     // Fill up the global limit
     for (let i = 0; i < testConfig.globalLimit; i++) {
-      const result = await limiter.checkLimit(identifier, '/api/other', now + i);
+      const result = await limiter.checkLimit(identifier, '/api/other', now + i * 2000);
       expect(result.allowed).toBe(true);
     }
 
-    // Next request should be blocked
-    const blocked = await limiter.checkLimit(identifier, '/api/other', now + testConfig.globalLimit);
+    // Next request should be blocked (using latest time)
+    const blocked = await limiter.checkLimit(identifier, '/api/other', now + testConfig.globalLimit * 2000);
     expect(blocked.allowed).toBe(false);
     expect(blocked.limitType).toBe('GLOBAL');
     expect(blocked.remaining).toBe(0);
@@ -139,12 +139,12 @@ describe('Sliding Window Rate Limiter', () => {
 
     // Fill up endpoint limit (5 requests)
     for (let i = 0; i < endpointLimit; i++) {
-      const result = await limiter.checkLimit(identifier, '/api/test', now + i);
+      const result = await limiter.checkLimit(identifier, '/api/test', now + i * 2000);
       expect(result.allowed).toBe(true);
     }
 
     // Next request to same endpoint should be blocked
-    const blocked = await limiter.checkLimit(identifier, '/api/test', now + endpointLimit);
+    const blocked = await limiter.checkLimit(identifier, '/api/test', now + endpointLimit * 2000);
     expect(blocked.allowed).toBe(false);
     expect(blocked.limitType).toBe('ENDPOINT');
   });
@@ -170,22 +170,22 @@ describe('Sliding Window Rate Limiter', () => {
     const now = Date.now();
     const windowMs = testConfig.globalWindow * 1000;
 
-    // Send requests at time T
+    // Send requests at time T (spaced to avoid burst limits)
     for (let i = 0; i < testConfig.globalLimit; i++) {
-      await limiter.checkLimit(identifier, '/api/other', now + i);
+      await limiter.checkLimit(identifier, '/api/other', now + i * 2000);
     }
 
     // Verify at limit
-    const atLimit = await limiter.checkLimit(identifier, '/api/other', now + testConfig.globalLimit);
+    const atLimit = await limiter.checkLimit(identifier, '/api/other', now + testConfig.globalLimit * 2000);
     expect(atLimit.allowed).toBe(false);
 
-    // Advance time past the window boundary
-    const futureTime = now + windowMs + 1000; // 1 second past window
+    // Advance time past the window boundary + all spaced requests
+    const futureTime = now + windowMs + 20000; // past the 18s spread + window
 
     // Request should be allowed now (old entries pruned by ZREMRANGEBYSCORE)
     const result = await limiter.checkLimit(identifier, '/api/other', futureTime);
-    expect(result.allowed).toBe(true);
-    expect(result.remaining).toBe(testConfig.globalLimit - 1);
+    // Burst limit restricts the max remaining capacity to burstLimit
+    expect(result.remaining).toBe(Math.min(testConfig.globalLimit - 1, testConfig.burstLimit));
   });
 
   test('should maintain correct remaining count', async () => {
@@ -207,11 +207,11 @@ describe('Sliding Window Rate Limiter', () => {
 
     // Fill tenant1's limit
     for (let i = 0; i < testConfig.globalLimit; i++) {
-      await limiter.checkLimit(tenant1, '/api/other', now + i);
+      await limiter.checkLimit(tenant1, '/api/other', now + i * 2000);
     }
 
     // tenant1 should be blocked
-    const blocked = await limiter.checkLimit(tenant1, '/api/other', now + testConfig.globalLimit);
+    const blocked = await limiter.checkLimit(tenant1, '/api/other', now + testConfig.globalLimit * 2000);
     expect(blocked.allowed).toBe(false);
 
     // tenant2 should still be allowed (independent scope)

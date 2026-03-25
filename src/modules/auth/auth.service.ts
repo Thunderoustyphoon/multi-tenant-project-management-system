@@ -215,9 +215,8 @@ export class AuthService {
       action: 'apikey.rotated',
       resourceType: 'apikey',
       resourceId: apiKeyId,
-      oldValue: { keyHash: apiKey.keyHash },
+      oldValue: { rotatedKeyId: apiKeyId },
       newValue: {
-        keyHash: rotatedKey.keyHash,
         rotatedAt: rotatedKey.rotatedAt,
         graceExpiresAt
       }

@@ -35,5 +35,6 @@ export function getRedis(): RedisClientType {
   return redis;
 }
 
-// Export for convenience - will be initialized after initializeRedis() is called
-export const redisClient = getRedis;
+// Lazy getter — callers must invoke redisClient() to get the Redis instance
+// Do NOT eagerly call getRedis() here; it throws before initializeRedis() runs
+export { getRedis as redisClient };

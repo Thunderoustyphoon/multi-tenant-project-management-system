@@ -77,8 +77,9 @@ export class FileUploadService {
     this.validateFileSize(file.size);
     this.validateFileType(file.mimetype);
 
-    // Generate safe filename
-    const fileExtension = path.extname(file.originalname);
+    // Generate safe filename — sanitize originalname to prevent path traversal
+    const safeOriginalName = path.basename(file.originalname); // strip any ../ sequences
+    const fileExtension = path.extname(safeOriginalName);
     const fileName = `${crypto.randomBytes(16).toString('hex')}${fileExtension}`;
     const filePath = path.join(UPLOAD_DIR, tenantId, fileName);
 

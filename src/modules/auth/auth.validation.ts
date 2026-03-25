@@ -29,7 +29,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 
 // API Key rotation validation
 export const rotateApiKeySchema = z.object({
-  apiKeyId: z.string().cuid('Invalid API key ID')
+  reason: z.string().max(255).optional(),
 });
 
 export type RotateApiKeyInput = z.infer<typeof rotateApiKeySchema>;

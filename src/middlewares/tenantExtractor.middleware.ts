@@ -90,7 +90,7 @@ export async function extractTenantFromApiKey(
         tenantId: apiKeyUser.tenantId,
         email: apiKeyUser.email,
         name: apiKeyUser.name,
-        passwordHash: apiKeyUser.passwordHash,
+        passwordHash: '', // Never expose hash to request context
         role: apiKeyUser.role as 'owner' | 'member',
         isEmailVerified: apiKeyUser.isEmailVerified,
         status: (apiKeyUser.status || 'active') as 'active' | 'suspended' | 'invited',

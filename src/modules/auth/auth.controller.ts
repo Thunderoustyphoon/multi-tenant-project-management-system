@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
-import { registerSchema, loginSchema, createApiKeySchema, rotateApiKeySchema } from './auth.validation';
+import { registerSchema, createApiKeySchema, rotateApiKeySchema } from './auth.validation';
 import { TenantRequest } from '../../types';
 import { ValidationError, UnauthorizedError, ForbiddenError } from '../../middlewares/error.middleware';
-import { createAuditLog } from '../../utils/audit.utils';
 import { EmailService } from '../../services/email.service';
-import prisma from '../../config/prisma';
 import logger from '../../utils/logger';
 
 const authService = new AuthService();
@@ -33,21 +31,7 @@ export async function register(req: Request, res: Response, next: NextFunction):
     });
 
 
-    await createAuditLog(prisma, {
-      tenantId: result.tenant.id,
-      userId: result.user.id,
-      action: 'TENANT_REGISTRATION',
-      resourceType: 'Tenant',
-      resourceId: result.tenant.id,
-      newValue: {
-        tenantName: result.tenant.name,
-        ownerEmail: result.user.email
-      },
-      ipAddress: req.ip,
-      httpMethod: 'POST',
-      endpoint: '/api/auth/register',
-      statusCode: 201
-    });
+    // Audit log is already created inside authService.registerTenant transaction
 
 
     try {
@@ -115,25 +99,10 @@ export async function generateApiKey(req: TenantRequest, res: Response, next: Ne
 
     const { name } = validation.data;
 
-    const result = await authService.generateApiKey(req.tenant.id, req.user?.id!);
+    const result = await authService.generateApiKey(req.tenant.id, req.user!.id);
 
 
-    await createAuditLog(prisma, {
-      tenantId: req.tenant.id,
-      userId: req.user?.id,
-      apiKeyId: result.id,
-      action: 'API_KEY_GENERATED',
-      resourceType: 'ApiKey',
-      resourceId: result.id,
-      newValue: {
-        keyName: name,
-        prefix: 'vz_'
-      },
-      ipAddress: req.ip,
-      httpMethod: 'POST',
-      endpoint: '/api/auth/api-keys',
-      statusCode: 201
-    });
+    // Audit log is already created inside authService.generateApiKey
 
     res.status(201).json({
       success: true,
@@ -174,28 +143,9 @@ export async function rotateApiKey(req: TenantRequest, res: Response, next: Next
     }
 
     // Note: service expects (tenantId, userId, apiKeyId)
-    const result = await authService.rotateApiKey(req.tenant.id, req.user?.id!, keyId);
+    const result = await authService.rotateApiKey(req.tenant.id, req.user!.id, keyId);
 
-    // Log rotation
-    await createAuditLog(prisma, {
-      tenantId: req.tenant.id,
-      userId: req.user?.id,
-      apiKeyId: keyId,
-      action: 'API_KEY_ROTATED',
-      resourceType: 'ApiKey',
-      resourceId: keyId,
-      oldValue: {
-        keyId
-      },
-      newValue: {
-        newKeyId: result.id,
-        gracePeriodUntil: result.graceExpiresAt
-      },
-      ipAddress: req.ip,
-      httpMethod: 'POST',
-      endpoint: `/api/auth/api-keys/${keyId}/rotate`,
-      statusCode: 200
-    });
+    // Audit log is already created inside authService.rotateApiKey
 
     // Send rotation notification email asynchronously
     try {
@@ -247,19 +197,10 @@ export async function listApiKeys(req: TenantRequest, res: Response, next: NextF
       throw new ForbiddenError('Only tenant owners can list API keys');
     }
 
-    const keys = await authService.listApiKeys(req.tenant.id, req.user?.id!);
+    const keys = await authService.listApiKeys(req.tenant.id, req.user!.id);
 
-    // Log access
-    await createAuditLog(prisma, {
-      tenantId: req.tenant.id,
-      userId: req.user?.id,
-      action: 'API_KEYS_LISTED',
-      resourceType: 'ApiKey',
-      ipAddress: req.ip,
-      httpMethod: 'GET',
-      endpoint: '/api/auth/api-keys',
-      statusCode: 200
-    });
+    // Audit log is already created inside authService.listApiKeys
+    // Note: listing audit is optional — currently logged by service for completeness
 
     res.status(200).json({
       success: true,
@@ -299,27 +240,9 @@ export async function revokeApiKey(req: TenantRequest, res: Response, next: Next
 
     const { keyId } = req.params;
 
-    const revokedKey = await authService.revokeApiKey(req.tenant.id, req.user?.id!, keyId);
+    const revokedKey = await authService.revokeApiKey(req.tenant.id, req.user!.id, keyId);
 
-    // Log revocation
-    await createAuditLog(prisma, {
-      tenantId: req.tenant.id,
-      userId: req.user?.id,
-      apiKeyId: revokedKey.id,
-      action: 'API_KEY_REVOKED',
-      resourceType: 'ApiKey',
-      resourceId: keyId,
-      oldValue: {
-        status: 'active'
-      },
-      newValue: {
-        status: revokedKey.status
-      },
-      ipAddress: req.ip,
-      httpMethod: 'DELETE',
-      endpoint: `/api/auth/api-keys/${keyId}`,
-      statusCode: 200
-    });
+    // Audit log is already created inside authService.revokeApiKey
 
     res.status(200).json({
       success: true,

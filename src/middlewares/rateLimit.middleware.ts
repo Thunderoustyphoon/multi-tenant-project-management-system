@@ -99,17 +99,22 @@ const rateLimitConfig: Record<string, number> = {
   'default': 500
 };
 
-function getEndpointLimitByPath(path: string): number {
-  // Normalize path (param-based endpoints)
-  let normalizedPath = path.split('?')[0]; // remove query string
+function getEndpointLimitByPath(reqPath: string): number {
+  // Normalize path (remove query string)
+  const normalizedPath = reqPath.split('?')[0];
   
   // Check exact match first
   if (rateLimitConfig[normalizedPath]) {
     return rateLimitConfig[normalizedPath];
   }
+  // Inside Express routers, req.path lacks /api prefix — try with prefix
+  const apiPath = `/api${normalizedPath}`;
+  if (rateLimitConfig[apiPath]) {
+    return rateLimitConfig[apiPath];
+  }
 
   // Check pattern matches
-  if (normalizedPath.includes('/auth/')) return rateLimitConfig['/api/auth'] || 100;
+  if (normalizedPath.includes('/auth/')) return rateLimitConfig['/api/auth/register'] || 100;
   if (normalizedPath.includes('/projects')) return rateLimitConfig['/api/projects'] || 500;
   if (normalizedPath.includes('/tasks')) return rateLimitConfig['/api/tasks'] || 500;
   if (normalizedPath.includes('/workspaces')) return rateLimitConfig['/api/workspaces'] || 100;

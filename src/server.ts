@@ -41,9 +41,9 @@ app.use(cors({
   maxAge: 86400
 }));
 
-// Body parser middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parser middleware — 10MB limit prevents DoS via unlimited POST payloads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Cookie parser
 app.use(cookieParser());
@@ -137,6 +137,11 @@ async function startServer() {
       server.close(async () => {
         await shutdownQueues();
         await prisma.$disconnect();
+        // Disconnect Redis (was missing — left dangling connections)
+        try {
+          const redis = getRedis();
+          await redis.disconnect();
+        } catch (_) { /* Redis may not be initialized */ }
         process.exit(0);
       });
     };

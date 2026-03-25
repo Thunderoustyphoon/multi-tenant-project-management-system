@@ -6,6 +6,18 @@ import { TenantRequest } from '../types';
 import { ForbiddenError, UnauthorizedError } from '../middlewares/error.middleware';
 import { responseTracker } from '../middlewares/responseTracker.middleware';
 
+/** Race a promise against a timeout so health checks never hang */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
+const HEALTH_CHECK_TIMEOUT = 3000; // 3 seconds per check
+
 /**
  * GET /health
  * Basic health check endpoint (public, no auth required)
@@ -25,15 +37,14 @@ export async function healthCheck(req: Request, res: Response) {
   };
 
   try {
-    // Database connectivity check
+    // Database connectivity check (with timeout)
     const dbStart = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
+    await withTimeout(prisma.$queryRaw`SELECT 1`, HEALTH_CHECK_TIMEOUT);
     const dbTime = Date.now() - dbStart;
 
     checks.database = {
       status: 'connected',
       responseTime: dbTime,
-      url: process.env.DATABASE_URL?.split('@')[1] || 'configured'
     };
   } catch (err) {
     checks.database = {
@@ -43,16 +54,15 @@ export async function healthCheck(req: Request, res: Response) {
   }
 
   try {
-    // Redis connectivity check
+    // Redis connectivity check (with timeout)
     const redis = getRedis();
     const redisStart = Date.now();
-    await redis.ping();
+    await withTimeout(redis.ping(), HEALTH_CHECK_TIMEOUT);
     const redisTime = Date.now() - redisStart;
 
     checks.redis = {
       status: 'connected',
       responseTime: redisTime,
-      host: process.env.REDIS_HOST || 'localhost'
     };
   } catch (err) {
     checks.redis = {
@@ -63,7 +73,7 @@ export async function healthCheck(req: Request, res: Response) {
 
   // Queue depth check (spec: "queue depth (pending + failed jobs)")
   try {
-    const queueStats = await getQueueStats();
+    const queueStats = await withTimeout(getQueueStats(), HEALTH_CHECK_TIMEOUT);
     checks.queues = {
       pending: queueStats.emailQueue.waiting + queueStats.emailQueue.delayed,
       failed: queueStats.emailQueue.failed,

@@ -102,7 +102,7 @@ export function errorHandler(
   else if (err instanceof ValidationError) {
     statusCode = 400;
     code = 'VALIDATION_ERROR';
-    details = err.details || {};
+    details = (Array.isArray(err.details) ? { errors: err.details } : err.details) || {};
   }
   else if (err instanceof UnauthorizedError) {
     statusCode = 401;

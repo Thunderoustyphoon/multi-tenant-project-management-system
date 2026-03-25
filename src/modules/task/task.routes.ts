@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import * as taskController from './task.controller';
-import { extractTenantFromApiKey } from '../../middlewares/tenantExtractor.middleware';
 import { rateLimitMiddleware } from '../../middlewares/rateLimit.middleware';
 
 const router = Router({ mergeParams: true });
@@ -44,7 +43,7 @@ const router = Router({ mergeParams: true });
  *       403:
  *         description: Access denied
  */
-router.post('/', extractTenantFromApiKey, rateLimitMiddleware, taskController.createTask);
+router.post('/', rateLimitMiddleware, taskController.createTask);
 
 /**
  * GET /api/projects/:projectId/tasks
@@ -86,7 +85,7 @@ router.post('/', extractTenantFromApiKey, rateLimitMiddleware, taskController.cr
  *       403:
  *         description: Access denied
  */
-router.get('/', extractTenantFromApiKey, rateLimitMiddleware, taskController.listTasks);
+router.get('/', rateLimitMiddleware, taskController.listTasks);
 
 /**
  * GET /api/projects/:projectId/tasks/:taskId
@@ -117,7 +116,7 @@ router.get('/', extractTenantFromApiKey, rateLimitMiddleware, taskController.lis
  *       404:
  *         description: Task not found
  */
-router.get('/:taskId', extractTenantFromApiKey, rateLimitMiddleware, taskController.getTask);
+router.get('/:taskId', rateLimitMiddleware, taskController.getTask);
 
 /**
  * PUT /api/projects/:projectId/tasks/:taskId
@@ -162,7 +161,7 @@ router.get('/:taskId', extractTenantFromApiKey, rateLimitMiddleware, taskControl
  *       404:
  *         description: Task not found
  */
-router.put('/:taskId', extractTenantFromApiKey, rateLimitMiddleware, taskController.updateTask);
+router.put('/:taskId', rateLimitMiddleware, taskController.updateTask);
 
 /**
  * POST /api/projects/:projectId/tasks/:taskId/assign
@@ -203,7 +202,7 @@ router.put('/:taskId', extractTenantFromApiKey, rateLimitMiddleware, taskControl
  *       404:
  *         description: Task not found
  */
-router.post('/:taskId/assign', extractTenantFromApiKey, rateLimitMiddleware, taskController.assignTask);
+router.post('/:taskId/assign', rateLimitMiddleware, taskController.assignTask);
 
 /**
  * DELETE /api/projects/:projectId/tasks/:taskId
@@ -234,6 +233,6 @@ router.post('/:taskId/assign', extractTenantFromApiKey, rateLimitMiddleware, tas
  *       404:
  *         description: Task not found
  */
-router.delete('/:taskId', extractTenantFromApiKey, rateLimitMiddleware, taskController.deleteTask);
+router.delete('/:taskId', rateLimitMiddleware, taskController.deleteTask);
 
 export default router;

@@ -39,6 +39,30 @@ export class ProjectService {
       }
     });
 
+    // Add creator as project owner — without this, permission checks
+    // (updateProject, deleteProject, addMember) would fail for the creator
+    await prisma.projectMember.create({
+      data: {
+        projectId: project.id,
+        userId,
+        role: 'owner',
+      },
+    });
+
+    // Re-fetch with members included
+    const projectWithMembers = await prisma.project.findUnique({
+      where: { id: project.id },
+      include: {
+        members: {
+          select: {
+            userId: true,
+            role: true,
+            user: { select: { name: true, email: true } }
+          }
+        }
+      }
+    });
+
 
     await createAuditLog(prisma, {
       tenantId,
@@ -52,7 +76,7 @@ export class ProjectService {
       }
     });
 
-    return project;
+    return projectWithMembers || project;
   }
 
   /**
@@ -114,11 +138,11 @@ export class ProjectService {
         const decoded = JSON.parse(Buffer.from(options.cursor, 'base64').toString());
         cursorFilter = {
           OR: [
-            { createdAt: { gt: decoded.createdAt } },
+            { createdAt: { lt: decoded.createdAt } },
             {
               AND: [
                 { createdAt: { equals: decoded.createdAt } },
-                { id: { gt: decoded.id } }
+                { id: { lt: decoded.id } }
               ]
             }
           ]

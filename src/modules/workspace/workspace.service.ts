@@ -81,8 +81,8 @@ export class WorkspaceService {
       throw new ForbiddenError('You do not have access to this workspace');
     }
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, tenantId },
       include: {
         members: {
           include: {
@@ -107,7 +107,7 @@ export class WorkspaceService {
       },
     });
 
-    if (!workspace || workspace.tenantId !== tenantId) {
+    if (!workspace) {
       throw new NotFoundError('Workspace not found');
     }
 
@@ -179,7 +179,11 @@ export class WorkspaceService {
 
     const workspace = await prisma.workspace.update({
       where: { id: workspaceId },
-      data,
+      data: {
+        ...data,
+        // Verify tenant owns this workspace (defense-in-depth)
+        tenantId,
+      },
     });
 
 
@@ -215,7 +219,7 @@ export class WorkspaceService {
 
 
     await prisma.project.updateMany({
-      where: { workspaceId },
+      where: { workspaceId, tenantId },
       data: { status: 'archived' },
     });
 
